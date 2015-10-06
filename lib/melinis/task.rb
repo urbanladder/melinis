@@ -47,6 +47,10 @@ module Melinis
 
       # 'failures' returns the list of records that are still in failed state and have individual retries left
       @failures = @task.task_failures.to_be_processed(@task.individual_retries_limit)
+
+      # 'For multiple operation on any individual object,
+      # if we want just a single TaskProcessing entry, we need to populate it in overwrite
+      @melinis_task_processing_id = nil
     end
 
     def prepare
@@ -68,7 +72,9 @@ module Melinis
     def run
       success, total = 0, 0
       begin
-        @current_run = Melinis::TaskProcessing.create!({:task_id => @task.id})
+        @current_run = Melinis::TaskProcessing.find_by(id: @melinis_task_processing_id)
+        @current_run ||= Melinis::TaskProcessing.create!({ task_id: @task.id })
+
         logger.info { "Starting run #%d" % [@current_run.id] }
         data = prepare
         total = data.size
@@ -77,16 +83,16 @@ module Melinis
             execute(unit)
             success += 1
           rescue Exception => e
-            failure(execution_failure(unit), {:exception => e})
+            failure(execution_failure(unit), { exception: e})
             logger.error { e }
           end
         end
       rescue Exception => e
-        failure({}, {:exception => e})
+        failure(execution_failure(nil), { exception: e})
         logger.error { e }
       ensure
-        success_info = { :success_count => success,
-                         :total => total }
+        success_info = { success_count: success,
+                         total: total }
         wrapup_info = wrapup
         final_wrapup = wrapup_info.is_a?(Hash) ? wrapup_info.merge(success_info) : success_info
         @current_run.processed_details = final_wrapup.to_yaml
