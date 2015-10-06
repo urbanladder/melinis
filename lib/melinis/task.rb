@@ -65,7 +65,7 @@ module Melinis
       {}
     end
 
-    def job_execution_faiulure
+    def job_execution_failure
       {}
     end
 
