@@ -16,11 +16,11 @@ module Melinis
 
     def self.setup(first_run_data = {})
       options = {
-        :description => '',
-        :file_path => '',
-        :command => '',
-        :individual_retries_limit => 1,
-        :bulk_retries_limit => 1
+        description: '',
+        file_path: '',
+        command: '',
+        individual_retries_limit: 1,
+        bulk_retries_limit: 1
       }.merge(self.properties)
       task_name = options.delete(:name)
       raise NoNameError unless task_name
@@ -29,8 +29,8 @@ module Melinis
 
       unless first_run_data.blank?
         current_run = Melinis::TaskProcessing.create!({
-          :task_id => task.id,
-          :processed_details => first_run_data.to_yaml
+          task_id: task.id,
+          processed_details: first_run_data.to_yaml
         })
       end
     end
@@ -83,12 +83,12 @@ module Melinis
             execute(unit)
             success += 1
           rescue Exception => e
-            failure(execution_failure(unit), { exception: e})
+            failure(execution_failure(unit), { exception: e })
             logger.error { e }
           end
         end
       rescue Exception => e
-        failure(execution_failure(nil), { exception: e})
+        failure(execution_failure(nil), { exception: e })
         logger.error { e }
       ensure
         success_info = { success_count: success,
@@ -108,15 +108,15 @@ module Melinis
     #            Or 'success' in case an earlier failed record succeeds in the next attempt.
     def failure(failure_details, args = {})
       task_failure_id = args[:task_failure_id]
-      data = failure_details.merge({:exception => args[:exception].to_s})
+      data = failure_details.merge({exception: args[:exception].to_s})
       attrs = {
-        :failure_details => data.to_yaml,
-        :status => args[:status] || 'failure'
+        failure_details: data.to_yaml,
+        status: args[:status] || 'failure'
       }
       if task_failure_id.nil?
         Melinis::TaskFailure.create!({
-          :task_processing_id => @current_run.id,
-          :task_id => @task.id
+          task_processing_id: @current_run.id,
+          task_id: @task.id
         }.merge(attrs))
       else
         task_failure = Melinis::TaskFailure.find_by_id(task_failure_id)
