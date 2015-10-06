@@ -1,6 +1,6 @@
 module Melinis
   class Task
-    attr_reader :last_run, :failures, :logger, :current_run
+    attr_reader :last_run, :failures, :logger, :current_run, :run_id
 
     # Returns a hash with the following keys:
     #
@@ -48,9 +48,9 @@ module Melinis
       # 'failures' returns the list of records that are still in failed state and have individual retries left
       @failures = @task.task_failures.to_be_processed(@task.individual_retries_limit)
 
-      # 'For multiple operation on any individual object,
+      # For multiple operation on any individual object,
       # if we want just a single TaskProcessing entry, we need to populate it in overwrite
-      @melinis_task_processing_id = nil
+      @run_id = nil
     end
 
     def prepare
@@ -76,8 +76,11 @@ module Melinis
     def run
       success, total = 0, 0
       begin
-        @current_run = Melinis::TaskProcessing.find_by(id: @melinis_task_processing_id)
-        @current_run ||= Melinis::TaskProcessing.create!({ task_id: @task.id })
+        if @run_id
+          @current_run = Melinis::TaskProcessing.find_by(id: @run_id)
+        else
+          @current_run = Melinis::TaskProcessing.create!({ task_id: @task.id })
+        end
 
         logger.info { "Starting run #%d" % [@current_run.id] }
         data = prepare
