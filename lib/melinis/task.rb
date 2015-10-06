@@ -69,6 +69,10 @@ module Melinis
       {}
     end
 
+    def post_failure_operations(failure_details, args)
+      {}
+    end
+
     def wrapup
       {}
     end
@@ -95,7 +99,7 @@ module Melinis
           end
         end
       rescue Exception => e
-        failure(job_execution_faiulure, { exception: e })
+        failure(job_execution_failure, { exception: e })
         logger.error { e }
       ensure
         success_info = { success_count: success,
@@ -129,6 +133,7 @@ module Melinis
         task_failure = Melinis::TaskFailure.find_by_id(task_failure_id)
         task_failure.increment(:retry_count).update_attributes(attrs)
       end
+      post_failure_operations(failure_details, args)
     end
   end
 end
