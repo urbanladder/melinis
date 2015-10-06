@@ -65,6 +65,10 @@ module Melinis
       {}
     end
 
+    def job_execution_faiulure
+      {}
+    end
+
     def wrapup
       {}
     end
@@ -88,7 +92,7 @@ module Melinis
           end
         end
       rescue Exception => e
-        failure(execution_failure(nil), { exception: e })
+        failure(job_execution_faiulure, { exception: e })
         logger.error { e }
       ensure
         success_info = { success_count: success,
