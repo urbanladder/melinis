@@ -1,6 +1,6 @@
 module Melinis
   class Task
-    attr_reader :last_run, :failures, :logger, :current_run
+    attr_reader :last_run, :failures, :logger, :current_run, :run_id
 
     # Returns a hash with the following keys:
     #
@@ -16,11 +16,11 @@ module Melinis
 
     def self.setup(first_run_data = {})
       options = {
-        :description => '',
-        :file_path => '',
-        :command => '',
-        :individual_retries_limit => 1,
-        :bulk_retries_limit => 1
+        description: '',
+        file_path: '',
+        command: '',
+        individual_retries_limit: 1,
+        bulk_retries_limit: 1
       }.merge(self.properties)
       task_name = options.delete(:name)
       raise NoNameError unless task_name
@@ -29,8 +29,8 @@ module Melinis
 
       unless first_run_data.blank?
         current_run = Melinis::TaskProcessing.create!({
-          :task_id => task.id,
-          :processed_details => first_run_data.to_yaml
+          task_id: task.id,
+          processed_details: first_run_data.to_yaml
         })
       end
     end
@@ -47,6 +47,10 @@ module Melinis
 
       # 'failures' returns the list of records that are still in failed state and have individual retries left
       @failures = @task.task_failures.to_be_processed(@task.individual_retries_limit)
+
+      # For multiple operation on any individual object,
+      # if we want just a single TaskProcessing entry, we need to populate it in overwrite
+      @run_id = nil
     end
 
     def prepare
@@ -61,6 +65,14 @@ module Melinis
       {}
     end
 
+    def job_execution_failure
+      {}
+    end
+
+    def post_failure_operations(failure_details, args)
+      {}
+    end
+
     def wrapup
       {}
     end
@@ -68,7 +80,12 @@ module Melinis
     def run
       success, total = 0, 0
       begin
-        @current_run = Melinis::TaskProcessing.create!({:task_id => @task.id})
+        if @run_id
+          @current_run = Melinis::TaskProcessing.find_by(id: @run_id)
+        else
+          @current_run = Melinis::TaskProcessing.create!({ task_id: @task.id })
+        end
+
         logger.info { "Starting run #%d" % [@current_run.id] }
         data = prepare
         total = data.size
@@ -77,16 +94,16 @@ module Melinis
             execute(unit)
             success += 1
           rescue Exception => e
-            failure(execution_failure(unit), {:exception => e})
+            failure(execution_failure(unit), { exception: e })
             logger.error { e }
           end
         end
       rescue Exception => e
-        failure({}, {:exception => e})
+        failure(job_execution_failure, { exception: e })
         logger.error { e }
       ensure
-        success_info = { :success_count => success,
-                         :total => total }
+        success_info = { success_count: success,
+                         total: total }
         wrapup_info = wrapup
         final_wrapup = wrapup_info.is_a?(Hash) ? wrapup_info.merge(success_info) : success_info
         @current_run.processed_details = final_wrapup.to_yaml
@@ -102,20 +119,21 @@ module Melinis
     #            Or 'success' in case an earlier failed record succeeds in the next attempt.
     def failure(failure_details, args = {})
       task_failure_id = args[:task_failure_id]
-      data = failure_details.merge({:exception => args[:exception].to_s})
+      data = failure_details.merge({exception: args[:exception].to_s})
       attrs = {
-        :failure_details => data.to_yaml,
-        :status => args[:status] || 'failure'
+        failure_details: data.to_yaml,
+        status: args[:status] || 'failure'
       }
       if task_failure_id.nil?
         Melinis::TaskFailure.create!({
-          :task_processing_id => @current_run.id,
-          :task_id => @task.id
+          task_processing_id: @current_run.id,
+          task_id: @task.id
         }.merge(attrs))
       else
         task_failure = Melinis::TaskFailure.find_by_id(task_failure_id)
         task_failure.increment(:retry_count).update_attributes(attrs)
       end
+      post_failure_operations(failure_details, args)
     end
   end
 end
